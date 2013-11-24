@@ -93,7 +93,7 @@ def toi(n):
 
 def get_choice(word, context, options):
     # os.system('cls' if os.name == 'nt' else 'clear')
-    sys.stderr.write("In the phrase:\n" + ' '.join(context) + "\nYou typed \"" + word + '".')
+    sys.stderr.write("\n\nIn the phrase:\n" + ' '.join(context) + "\nYou typed \"" + word + '".')
     sys.stderr.write(" Did you mean:\n")
     sys.stderr.write("0: <no change>\n")
     sys.stderr.write('\n'.join([str(i + 1) + ': ' + w for i, w in enumerate(options)]))
@@ -193,7 +193,7 @@ def test():
             if W not in vocab or p < max_check_prob:
                 candidates = get_candidates(trigram, next, counts, fl_dict)
                 best_matches = get_best_matches(W, candidates)
-                if W not in best_matches[:2]:
+                if W not in best_matches[:3] or (p < min_skip_prob and best_matches[0] != W):
                     if R in best_matches:
                         print W + ':' + R
                         if W != R:

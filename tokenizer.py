@@ -6,13 +6,14 @@ import re
 def is_word(w):
     ret = w == '<BEGIN>'
     ret = ret or (re.match(r'[a-z\'\-.]{2,}|[a-z]', w) is not None)
+    ret = ret and w != "''"
     return ret
 
 
 def is_clitic(w):
-    ret = w in ["'ll", "n't", "'ve", "'m", "'s"]
-    ret = ret or (is_word(w) and (re.match(r'[b-df-hj-np-tv-xz\']+|\'[a-z]+', w) is not None))
-    return ret
+    return w in ["'ll", "n't", "'ve", "'m", "'s", "s", "ll", "t", "'d'", "d", "ve"]
+    # ret = ret or (is_word(w) and (re.match(r'[b-df-hj-np-tv-xz\']+$|\'[a-z]+$', w) is not None))
+    # return ret
 
 
 def condense_tokens(wordlist):

@@ -2,8 +2,8 @@
 from collections import defaultdict
 from nltk.corpus import gutenberg
 from nltk.corpus import reuters
-from nltk.corpus import brown
 from tokenizer import is_word
+from nltk.corpus import brown
 import cProfile
 import cPickle
 import sys
