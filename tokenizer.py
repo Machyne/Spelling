@@ -20,10 +20,11 @@ def condense_tokens(wordlist):
     i = 0
     newlist = []
     while i < len(wordlist):
+        curr = wordlist[i]
         if i == len(wordlist) - 1:
-            newlist.append(wordlist[i])
+            newlist.append(curr)
             break
-        curr, next = wordlist[i], wordlist[i + 1]
+        next = wordlist[i + 1]
         if is_word(curr) and is_clitic(next):
             newlist.append(curr + next)
             i += 2
@@ -50,5 +51,4 @@ def tokenize(sentence):
         newlist.append(word)
     if sentence != '':
         newlist.append(sentence)
-    return newlist
-    # return condense_tokens(newlist)
+    return condense_tokens(newlist)

@@ -1,14 +1,11 @@
-from keyboarmap import str_dist
+from keyboardmap import str_dist
 from tokenizer import tokenize
 from tokenizer import is_word
 from trainer import get_data
-# import keyboarmap
+import keyboardmap
 import nltk
 import sys
-import os
 import re
-if False:
-    print os
 
 
 # The maximum probability for rechecking a word.
@@ -59,11 +56,12 @@ def get_candidates(words, next, counts, fld):
     d = counts[words[0]][words[1]] if len(words) == 2 else counts[words[0]]
     keys = set([x for x in d.keys() if x != 0 and d[x][0] > 0])
     cands = [(w, scale * prob(words + [w], counts, next)) for w in keys] if d[0] > 0 else []
-    # gen = (x for x in keyboarmap.alphabet if keyboarmap.csub(x, old_word[0]) < keyboarmap.no_adj)
-    # for k in gen:
-    for w in fld[old_word[0]]:
-        if w not in keys:
-            cands.append((w, 0))
+    gen = (x for x in keyboardmap.alphabet
+           if keyboardmap.csub(x, old_word[0]) <= keyboardmap.similar_letter)
+    for k in gen:
+        for w in fld[k]:
+            if w not in keys:
+                cands.append((w, 0))
     return cands
 
 
@@ -92,7 +90,6 @@ def toi(n):
 
 
 def get_choice(word, context, options):
-    # os.system('cls' if os.name == 'nt' else 'clear')
     sys.stderr.write("\n\nIn the phrase:\n" + ' '.join(context) + "\nYou typed \"" + word + '".')
     sys.stderr.write(" Did you mean:\n")
     sys.stderr.write("0: <no change>\n")
@@ -115,6 +112,14 @@ def merge_changes(old_s, new_s):
                 w = w[0].upper() + w[1:]
             old_s[i] = w
     return old_s
+
+
+def needs_change(w, best_matches, p):
+    a = w not in best_matches[:3] or (p < min_skip_prob and best_matches[0] != w)
+    W = filter(lambda x: x in keyboardmap.alphabet, w)
+    b = W not in best_matches[:3] or (p < min_skip_prob and best_matches[0] != W)
+    c = (w == 'i') and w in best_matches
+    return (a and b) and not c
 
 
 def main():
@@ -145,7 +150,7 @@ def main():
                 candidates = get_candidates(trigram, next, counts, fl_dict)
                 best_matches = get_best_matches(w, candidates)
                 # print best_matches
-                if w not in best_matches[:3] or (p < min_skip_prob and best_matches[0] != w):
+                if needs_change(w, best_matches, p):
                     choice = get_choice(w, context, best_matches)
                     s2[i] = choice
         new_sents.append(merge_changes(s, s2[1:]))
@@ -193,23 +198,25 @@ def test():
             if W not in vocab or p < max_check_prob:
                 candidates = get_candidates(trigram, next, counts, fl_dict)
                 best_matches = get_best_matches(W, candidates)
-                if W not in best_matches[:3] or (p < min_skip_prob and best_matches[0] != W):
+                if needs_change(W, best_matches, p):
+                    end = R + ',"' + str(best_matches) + '"'
                     if R in best_matches:
-                        print W + ':' + R
                         if W != R:
                             # fix
+                            print W + ',~>,' + end
                             error_count[0] += 1
                         else:
                             # doublecheck
+                            print W + ',==,' + end
                             error_count[1] += 1
                     else:
                         if W != R:
-                            print W + ':?'
                             # couldnt_fix
+                            print W + ',??,' + end
                             error_count[2] += 1
                         else:
-                            print W + ':-'
                             # unwanted_removal
+                            print W + ',--,' + end
                             error_count[3] += 1
     print 'Total Corrections:', error_count[0]
     print 'Total Double Checks:', error_count[1]
