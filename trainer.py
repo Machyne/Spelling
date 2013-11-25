@@ -111,10 +111,14 @@ def get_fl_dict(vocab):
     return d
 
 
+# This calls all the methods necessary to save the
+# data to disk, and it has nice print outs.
+# This will exit with an error if the serialized
+# file already exists on disk.
 def train():
     if os.path.isfile(SER_FILE):
         msg = 'Error: {} already exists.\n'
-        msg += 'To force update, run \'{} -r\'\n'
+        msg += 'To force update, run \'{} -f\'\n'
         msg = msg.format(SER_FILE, sys.argv[0])
         sys.stderr.write(msg)
         exit(1)
@@ -130,11 +134,14 @@ def train():
     print 'Done.'
 
 
+# Runs the train method.
+# The -f flag forces replace removal of the serialized file if it exists.
+# The -p flag runs this with a profiler.
 def main():
-    if '-r' in sys.argv[1:] or '-rp' in sys.argv[1:] or '-pr' in sys.argv[1:]:
+    if '-f' in sys.argv[1:] or '-fp' in sys.argv[1:] or '-pf' in sys.argv[1:]:
         if os.path.isfile(SER_FILE):
             os.remove(SER_FILE)
-    if '-p' in sys.argv[1:] or '-rp' in sys.argv[1:] or '-pr' in sys.argv[1:]:
+    if '-p' in sys.argv[1:] or '-fp' in sys.argv[1:] or '-pf' in sys.argv[1:]:
         cProfile.run('train()')
     else:
         train()

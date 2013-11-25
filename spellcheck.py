@@ -35,7 +35,7 @@ def interp_prob(words, counts):
     return 0.1 * uni_gr + 0.4 * bii_gr + 0.5 * tri_gr
 
 
-# The average between the interpolated prob of the trigram
+# A weighted average between the interpolated prob of the trigram
 # and the next trigram.
 def prob(trigram, counts, next=None):
     p1 = interp_prob(trigram, counts)
@@ -50,12 +50,11 @@ def prob(trigram, counts, next=None):
 
 # Returns a list of the most likely words with their probabilities
 def get_candidates(words, next, counts, fld):
-    scale = 675.0
     old_word = words[-1]
     words = words[:-1]
     d = counts[words[0]][words[1]] if len(words) == 2 else counts[words[0]]
     keys = set([x for x in d.keys() if x != 0 and d[x][0] > 0])
-    cands = [(w, scale * prob(words + [w], counts, next)) for w in keys] if d[0] > 0 else []
+    cands = [(w, prob(words + [w], counts, next)) for w in keys] if d[0] > 0 else []
     gen = (x for x in keyboardmap.alphabet
            if keyboardmap.csub(x, old_word[0]) <= keyboardmap.similar_letter)
     for k in gen:
@@ -68,17 +67,21 @@ def get_candidates(words, next, counts, fld):
 # This will return the n best matches to 'word' in the list 'candidates'
 # weighted by probability, and excluding those with distance greater than 10
 def get_best_matches(word, candidates):
+    # this is the scale factor for probabilities
+    scale = 675.0
+    # the maximum (and target) number of matches to be returned
     number_to_return = 10
+    # nothing with a final score greater than this will be returned
     max_distance = 7.5
-    match_values = []
+    matches = []
     for w, score in candidates:
         if(abs(len(w) - len(word)) > 3):
             continue
         dist = str_dist(word, w)
         if dist <= max_distance:
-            match_values.append((w, dist - score))
-    match_values.sort(key=lambda pair: pair[1])
-    return [pair[0] for pair in match_values[:number_to_return]]
+            matches.append((w, dist - scale * score))
+    matches.sort(key=lambda pair: pair[1])
+    return [pair[0] for pair in matches[:number_to_return]]
 
 
 # Tries to convert a string to an int, returns None if it fails
@@ -89,6 +92,7 @@ def toi(n):
         return None
 
 
+# This displays the potential word options and returns what the user chose.
 def get_choice(word, context, options):
     sys.stderr.write("\n\nIn the phrase:\n" + ' '.join(context) + "\nYou typed \"" + word + '".')
     sys.stderr.write(" Did you mean:\n")
@@ -104,6 +108,9 @@ def get_choice(word, context, options):
     return choice
 
 
+# This merges the changes in the new sentence into the old sentence preserving
+# first-letter-capitolization. This is used to display the corrected version
+# when not run in testing mode.
 def merge_changes(old_s, new_s):
     for i, token in enumerate(old_s):
         if is_word(token.lower()):
@@ -114,7 +121,10 @@ def merge_changes(old_s, new_s):
     return old_s
 
 
+# This method determines whether or not a word will be marked as 'incorrect' and
+# will therefore need to be changed.
 def needs_change(w, best_matches, p):
+    global min_skip_prob
     a = w not in best_matches[:3] or (p < min_skip_prob and best_matches[0] != w)
     W = filter(lambda x: x in keyboardmap.alphabet, w)
     b = W not in best_matches[:3] or (p < min_skip_prob and best_matches[0] != W)
@@ -122,8 +132,10 @@ def needs_change(w, best_matches, p):
     return (a and b) and not c
 
 
+# The main method for non-training mode
 def main():
-    global min_prob
+    global max_check_prob
+    # first get the input (either from stdin or the first arg)
     infile = None
     is_stdin = False
     if len(sys.argv) < 2:
@@ -134,22 +146,27 @@ def main():
     sents = [tokenize(s) for s in nltk.sent_tokenize(infile.read())]
     if not is_stdin:
         infile.close()
+    # read in the trained data
     vocab, fl_dict, counts = get_data()
+    # an array of fixed sentences (represented as token arrays)
     new_sents = []
     for s in sents:
+        # s2 is the words only, lowercase version of the sentence
         s2 = ['<BEGIN>'] + [w.lower() for w in s if is_word(w.lower())]
+        # iterate through the words
         for i, w in enumerate(s2):
+            # ignore '<BEGIN>'
             if i == 0:
                 continue
             trigram = s2[max(i - 2, 0):i + 1]
+            # The next word in the sentence
             next = s2[i + 1] if i + 1 < len(s2) else None
+            # The surrounding few words
             context = s2[max(i - 4, 1):min(len(s2), i + 4)]
             p = prob(trigram, counts)
             if w not in vocab or p < max_check_prob:
-                # print "Error: '" + w + "'", p
                 candidates = get_candidates(trigram, next, counts, fl_dict)
                 best_matches = get_best_matches(w, candidates)
-                # print best_matches
                 if needs_change(w, best_matches, p):
                     choice = get_choice(w, context, best_matches)
                     s2[i] = choice
@@ -158,40 +175,42 @@ def main():
 
 
 def test():
-    global min_prob
-    infile = None
-    is_stdin = False
-    if len(sys.argv) < 2:
-        infile = sys.stdin
-        is_stdin = True
-    else:
-        infile = open(sys.argv[1])
+    global max_check_prob
+    # first get the input
+    infile = open(sys.argv[1])
     sents = [tokenize(s) for s in nltk.sent_tokenize(infile.read())]
-    if not is_stdin:
-        infile.close()
+    infile.close()
+    # read in the trained data
     vocab, fl_dict, counts = get_data()
-    # fixes, doublechecks, couldnt_fix, unwanted_removals
+    # [fixes, double_checks, couldnt_fixes, unwanted_removals]
     error_count = [0, 0, 0, 0]
     for s in sents:
+        # s2 is the words only, lowercase version of the sentence
         s2 = ['<BEGIN>'] + [w for w in s if is_word(w.lower())]
+        # tagged errors are represented by "wordXXXwrrrd"
+        # this next part splits those in to tuples.
         for i in xrange(1, len(s2)):
             if 'XXX' in s2[i]:
                 l, _, r = s2[i].partition('XXX')
                 s2[i] = (l.lower(), r.lower())
             else:
                 s2[i] = s2[i].lower()
+        # iterate through the words
         for i, w in enumerate(s2):
+            # ignore '<BEGIN>'
             if i == 0:
                 continue
-            # Wrong?
+            # The Wrong word (if there is an error)
             W = w[1] if type(w) == tuple else w
-            # Right.
+            # The Right word (either way)
             R = w[0] if type(w) == tuple else w
             trigram = s2[max(i - 2, 0):i + 1]
+            # if there are tuples in the trigram, use the original input
             for i in xrange(len(trigram)):
                 if type(trigram[i]) == tuple:
                     trigram[i] = trigram[i][1]
             next = s2[i + 1] if i + 1 < len(s2) else None
+            # if next is a tuple, use the original input
             if type(next) == tuple:
                 next = next[1]
             p = prob(trigram, counts)
@@ -199,31 +218,39 @@ def test():
                 candidates = get_candidates(trigram, next, counts, fl_dict)
                 best_matches = get_best_matches(W, candidates)
                 if needs_change(W, best_matches, p):
+                    # The end of what will be printed
                     end = R + ',"' + str(best_matches) + '"'
+                    # if the Right word is in the best matches
                     if R in best_matches:
+                        # if the corpus marked this as an error
                         if W != R:
                             # fix
                             print W + ',~>,' + end
                             error_count[0] += 1
+                        # else the corpus did not mark this as an error
                         else:
-                            # doublecheck
-                            print W + ',==,' + end
+                            # double_check
+                            print W + ',~~,' + end
                             error_count[1] += 1
+                    # else the Right word is not in the best matches
                     else:
+                        # if the corpus marked this as an error
                         if W != R:
                             # couldnt_fix
                             print W + ',??,' + end
                             error_count[2] += 1
+                        # else the corpus did not mark this as an error
                         else:
                             # unwanted_removal
                             print W + ',--,' + end
                             error_count[3] += 1
-    print 'Total Corrections:', error_count[0]
-    print 'Total Double Checks:', error_count[1]
-    print 'Total Couldnt Fix:', error_count[2]
-    print 'Total Unwanted Removals:', error_count[3]
+    sys.stderr.write('Total Corrections: ' + str(error_count[0]) + '\n')
+    sys.stderr.write('Total Double Checks: ' + str(error_count[1]) + '\n')
+    sys.stderr.write('Total Couldnt Fix: ' + str(error_count[2]) + '\n')
+    sys.stderr.write('Total Unwanted Removals: ' + str(error_count[3]) + '\n')
 
 
+# The -t flag runs this under testing mode
 if __name__ == '__main__':
     if len(sys.argv) > 2 and sys.argv[2] == '-t':
         test()

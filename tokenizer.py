@@ -10,12 +10,12 @@ def is_word(w):
     return ret
 
 
+# This will be used for condensing clitics split from their original word
 def is_clitic(w):
     return w in ["'ll", "n't", "'ve", "'m", "'s", "s", "ll", "t", "'d'", "d", "ve"]
-    # ret = ret or (is_word(w) and (re.match(r'[b-df-hj-np-tv-xz\']+$|\'[a-z]+$', w) is not None))
-    # return ret
 
 
+# If there is a word adjacent to a clitic, combine them.
 def condense_tokens(wordlist):
     i = 0
     newlist = []
@@ -35,6 +35,7 @@ def condense_tokens(wordlist):
 
 
 # This uses the nltk word tokenizer, but adds in whitespace.
+# It also uses the condense function above.
 def tokenize(sentence):
     s = nltk.word_tokenize(sentence)
     s = [(x if x != "''" and x != '``' else '"') for x in s]
